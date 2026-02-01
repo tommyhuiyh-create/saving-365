@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Savings Lab: GitHub Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root { --github-canvas: #0d1117; }
+        body {
+            background-color: var(--github-canvas);
+            margin: 0;
+            color: #e6edf3;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            overflow-x: hidden;
+        }
+        #root { min-height: 100vh; display: flex; flex-direction: column; }
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.6s ease-out forwards; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- 引入 React 資源 -->
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@19",
+    "react-dom/client": "https://esm.sh/react-dom@19/client",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "vite": "https://esm.sh/vite@^7.3.1"
+  }
+}
+</script>
+
+    <script type="module">
+        import React, { useState, useEffect, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+
+        // --- 配置常數 ---
+        const TOTAL_DAYS = 365;
+        const DAILY_MULTIPLIER = 2;
+        const TOTAL_GOAL = 133590; 
+        const STORAGE_KEY = 'savings_lab_single_file_v5';
+        const START_DATE = new Date(2025, 0, 1);
+
+        // --- 工具函數 ---
+        const getDateObj = (id) => {
+            const targetDate = new Date(START_DATE);
+            targetDate.setDate(START_DATE.getDate() + (TOTAL_DAYS - id));
+            return targetDate;
+        };
+
+        const getDateLabel = (id) => {
+            const d = getDateObj(id);
+            return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+        };
+
+        const getMonthName = (monthIndex) => {
+            return ["January", "February", "March", "April", "May", "June", 
+                    "July", "August", "September", "October", "November", "December"][monthIndex];
+        };
+
+        // --- 組件 ---
+        const StatsCard = ({ label, value, icon, subValue }) => (
+            <div className="bg-[#161b22] p-4 rounded-xl border border-[#30363d] flex flex-col justify-between shadow-sm">
+                <div className="flex justify-between items-start">
+                    <span className="text-xl">{icon}</span>
+                    {subValue && <span className="text-[9px] text-gray-500 font-mono tracking-tighter uppercase">{subValue}</span>}
+                </div>
+                <div className="mt-3">
+                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">{label}</div>
+                    <div className="text-lg font-black tracking-tight text-[#e6edf3] font-mono">{value}</div>
+                </div>
+            </div>
+        );
+
+        function App() {
+            const [state, setState] = useState(() => {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                return saved ? JSON.parse(saved) : { savedDays: [], extraSavings: 0 };
+            });
+            
+            const [activeTab, setActiveTab] = useState('overview');
+            const [extraInput, setExtraInput] = useState("");
+
+            useEffect(() => {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            }, [state]);
+
+            const stats = useMemo(() => {
+                const gridTotal = state.savedDays.reduce((acc, d) => acc + (d.id * DAILY_MULTIPLIER), 0);
+                const total = gridTotal + (Number(state.extraSavings) || 0);
+                const percent = (total / TOTAL_GOAL) * 100;
+                return {
+                    total,
+                    percent: percent.toFixed(1),
+                    count: state.savedDays.length,
+                    gap: Math.max(TOTAL_GOAL - total, 0),
+                    remainingDays: TOTAL_DAYS - state.savedDays.length
+                };
+            }, [state]);
+
+            const toggleDay = (id) => {
+                const isSaved = state.savedDays.some(d => d.id === id);
+                if (isSaved) {
+                    if (window.confirm(`確定取消 Day ${id} (${getDateLabel(id)}) 的儲蓄紀錄？`)) {
+                        setState(s => ({ ...s, savedDays: s.savedDays.filter(d => d.id !== id) }));
+                    }
+                } else {
+                    setState(s => ({ ...s, savedDays: [{ id, timestamp: Date.now() }, ...s.savedDays] }));
+                }
+            };
+
+            const groupedMatrix = useMemo(() => {
+                const months = {};
+                for (let i = TOTAL_DAYS; i >= 1; i--) {
+                    const d = getDateObj(i);
+                    const key = `${d.getFullYear()}-${d.getMonth()}`;
+                    if (!months[key]) months[key] = [];
+                    months[key].push(i);
+                }
+                return months;
+            }, []);
+
+            const recentActivity = useMemo(() => {
+                return [...state.savedDays].sort((a, b) => b.timestamp - a.timestamp).slice(0, 5);
+            }, [state.savedDays]);
+
+            return React.createElement('div', { className: "max-w-md mx-auto min-h-screen bg-[#0d1117] px-6 py-8 select-none pb-32 font-sans" }, [
+                // Header
+                React.createElement('header', { key: 'header', className: "flex justify-between items-center mb-10" }, [
+                    React.createElement('div', { className: "flex items-center gap-3", key: 'brand' }, [
+                        React.createElement('div', { className: "w-10 h-10 bg-[#39d353] rounded-lg flex items-center justify-center" }, 
+                            React.createElement('svg', { height: "24", viewBox: "0 0 16 16", width: "24", fill: "#0d1117" }, 
+                                React.createElement('path', { d: "M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z" })
+                            )
+                        ),
+                        React.createElement('div', null, [
+                            React.createElement('h1', { className: "text-lg font-bold text-white" }, "Savings Lab"),
+                            React.createElement('p', { className: "text-[10px] text-[#39d353] font-mono uppercase tracking-tighter" }, "v5.0.0-standalone")
+                        ])
+                    ]),
+                    React.createElement('div', { key: 'progress', className: "bg-[#161b22] border border-[#30363d] px-4 py-2 rounded-2xl flex flex-col items-center shadow-lg" }, [
+                        React.createElement('span', { className: "text-xl font-black text-[#39d353]" }, `${stats.percent}%`),
+                        React.createElement('span', { className: "text-[8px] text-gray-500 font-bold uppercase" }, "Progress")
+                    ])
+                ]),
+
+                // Content
+                activeTab === 'overview' ? 
+                React.createElement('div', { key: 'overview', className: "space-y-6 animate-fade-in" }, [
+                    React.createElement('div', { className: "bg-[#161b22] rounded-[2rem] p-8 border border-[#30363d] shadow-2xl relative overflow-hidden group" }, [
+                        React.createElement('div', { className: "relative z-10" }, [
+                            React.createElement('span', { className: "text-[10px] font-bold text-gray-500 uppercase tracking-widest" }, "Current Net Worth"),
+                            React.createElement('div', { className: "text-5xl font-black tracking-tighter mt-3 mb-8 text-white font-mono" }, [
+                                React.createElement('span', { className: "text-[#30363d] mr-1" }, "$"),
+                                stats.total.toLocaleString()
+                            ]),
+                            React.createElement('div', { className: "w-full bg-[#0d1117] h-3 rounded-full overflow-hidden border border-[#30363d]" }, 
+                                React.createElement('div', { className: "bg-gradient-to-r from-[#216e39] to-[#39d353] h-full shadow-[0_0_15px_rgba(57,211,83,0.4)]", style: { width: `${stats.percent}%` } })
+                            )
+                        ])
+                    ]),
+                    React.createElement('div', { className: "grid grid-cols-2 gap-4" }, [
+                        React.createElement(StatsCard, { label: "已存天數", value: `${stats.count}/365`, icon: "📅", subValue: "Commits" }),
+                        React.createElement(StatsCard, { label: "剩餘天數", value: `${stats.remainingDays}D`, icon: "⏳", subValue: "Milestone" })
+                    ]),
+                    React.createElement('div', { className: "bg-[#161b22] p-6 rounded-3xl border border-[#30363d]" }, [
+                        React.createElement('h3', { className: "text-[10px] font-bold text-gray-500 uppercase mb-4 tracking-widest" }, "Recent Activity"),
+                        recentActivity.length > 0 ? recentActivity.map((act, i) => 
+                            React.createElement('div', { key: i, className: "flex items-center justify-between mb-4 last:mb-0" }, [
+                                React.createElement('div', { className: "text-sm font-bold text-[#e6edf3]" }, `Day ${act.id} (${getDateLabel(act.id)})`),
+                                React.createElement('div', { className: "text-[#39d353] font-mono font-bold text-sm" }, `+$${act.id * DAILY_MULTIPLIER}`)
+                            ])
+                        ) : React.createElement('div', { className: "text-center text-gray-600 text-xs font-mono py-4" }, "No activity detected.")
+                    ]),
+                    React.createElement('div', { className: "bg-[#161b22] p-5 rounded-3xl border border-[#30363d]" }, [
+                        React.createElement('div', { className: "text-[10px] font-bold text-gray-500 uppercase mb-4 tracking-widest" }, "Manual Asset Push"),
+                        React.createElement('div', { className: "flex gap-2" }, [
+                            React.createElement('input', { 
+                                type: "number", 
+                                value: extraInput,
+                                onChange: e => setExtraInput(e.target.value),
+                                placeholder: "Amount",
+                                className: "flex-1 bg-[#0d1117] border border-[#30363d] text-white rounded-xl px-4 py-3 outline-none focus:border-[#39d353] font-mono"
+                            }),
+                            React.createElement('button', { 
+                                onClick: () => {
+                                    const val = parseInt(extraInput);
+                                    if (val > 0) { setState(s => ({ ...s, extraSavings: (Number(s.extraSavings) || 0) + val })); setExtraInput(""); }
+                                },
+                                className: "bg-[#238636] text-white px-6 rounded-xl font-bold active:scale-95"
+                            }, "Push")
+                        ])
+                    ])
+                ]) : 
+                React.createElement('div', { key: 'matrix', className: "animate-fade-in" }, [
+                    Object.keys(groupedMatrix).map(monthKey => {
+                        const monthIndex = parseInt(monthKey.split('-')[1]);
+                        const days = groupedMatrix[monthKey];
+                        return React.createElement('div', { key: monthKey, className: "mb-8" }, [
+                            React.createElement('h3', { className: "text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-[#30363d] pb-2 mb-3" }, getMonthName(monthIndex)),
+                            React.createElement('div', { className: "grid grid-cols-4 gap-2" }, days.map(id => {
+                                const isSaved = state.savedDays.some(d => d.id === id);
+                                const intensity = id > 250 ? 'bg-[#216e39]' : id > 100 ? 'bg-[#30a14e]' : 'bg-[#40c463]';
+                                return React.createElement('button', {
+                                    key: id,
+                                    onClick: () => toggleDay(id),
+                                    className: `aspect-square rounded-xl flex flex-col items-center justify-center border transition-all ${isSaved ? `${intensity} border-transparent text-white opacity-60 scale-95 shadow-inner` : 'bg-[#161b22] border-[#30363d] text-[#8b949e] hover:border-[#39d353]'}`
+                                }, [
+                                    React.createElement('span', { className: "text-[8px] font-mono opacity-60 mb-1" }, getDateLabel(id)),
+                                    React.createElement('span', { className: "text-sm font-black font-mono" }, `$${id * DAILY_MULTIPLIER}`)
+                                ]);
+                            }))
+                        ]);
+                    })
+                ]),
+
+                // Tab Bar
+                React.createElement('nav', { key: 'nav', className: "fixed bottom-8 left-1/2 -translate-x-1/2 flex bg-[#161b22]/90 backdrop-blur-xl p-1.5 rounded-[1.5rem] shadow-2xl border border-[#30363d] z-50 w-[260px]" }, [
+                    React.createElement('button', { 
+                        onClick: () => setActiveTab('overview'),
+                        className: `flex-1 py-3 rounded-2xl text-xs font-bold transition-all ${activeTab === 'overview' ? 'bg-[#30363d] text-white shadow-lg' : 'text-gray-500'}`
+                    }, "Dashboard"),
+                    React.createElement('button', { 
+                        onClick: () => setActiveTab('matrix'),
+                        className: `flex-1 py-3 rounded-2xl text-xs font-bold transition-all ${activeTab === 'matrix' ? 'bg-[#30363d] text-white shadow-lg' : 'text-gray-500'}`
+                    }, "Matrix")
+                ])
+            ]);
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(React.createElement(App));
+    </script>
+</body>
+</html>
